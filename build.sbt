@@ -11,7 +11,7 @@ resolvers += Resolver.url("https://repo.scala-sbt.org/scalasbt/sbt-plugin-releas
 libraryDependencies += "org.slf4j"          % "slf4j-api"            % "1.7.25"
 libraryDependencies += "org.slf4j"          % "slf4j-log4j12"        % "1.7.26"
 libraryDependencies += "org.apache.commons" % "commons-math3"        % "3.6.1"
-libraryDependencies += "org.apache.kafka"   %% "kafka-streams-scala" % "2.2.0"
+libraryDependencies += "org.apache.kafka"   %% "kafka-streams-scala" % "2.3.0"
 libraryDependencies += "net.liftweb"        %% "lift-json"           % "3.3.0"
 
 

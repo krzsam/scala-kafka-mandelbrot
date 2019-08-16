@@ -2,9 +2,9 @@ package kafka.connector
 
 import java.time.Duration
 
+import kafka.Calculate.processDataPoint
 import kafka._
 import net.liftweb.json.{DefaultFormats, Serialization}
-import org.apache.commons.math3.complex.Complex
 import org.apache.kafka.clients.consumer.{ConsumerRecords, KafkaConsumer}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.slf4j.{Logger, LoggerFactory}
@@ -17,8 +17,6 @@ object CalculationMain {
 
   val topicIn = Topics.CONNECTOR_REQUESTS
   val topicOut = Topics.CONNECTOR_RESPONSES
-
-  val BigNumber = new Complex( Double.MaxValue, Double.MaxValue )
 
   // for JSON deserialisation
   implicit val formats = DefaultFormats
@@ -37,7 +35,7 @@ object CalculationMain {
   }
 
   def main(args: Array[String]) {
-    LOG.info( "Starting Calculation Service for CONNECTOR API topics")
+    LOG.info( "Starting Calculation for CONNECTOR API")
 
     val options = nextOption( Map(), args.toList )
 
@@ -73,20 +71,6 @@ object CalculationMain {
         val request = Serialization.read[Message]( record.value() )
         val result = processDataPoint( request )
         sendResult( producer, result, record.key() )
-    }
-  }
-
-  private def processDataPoint( request: Message ): Message = {
-    request.data match {
-      case Some( DataPoint(posX, posY, c0, iterations) ) =>
-        val result = Calculate.calculateOne( c0, iterations )
-        val resultAdjusted = if (result.isInfinite || result.isNaN) BigNumber else result
-        //LOG.info( s"Calculating: (${posX},${posY}) , ${c0} -> ${resultAdjusted}")
-        Message( Some( DataPoint(posX, posY, resultAdjusted, 0) ), None )
-
-      case None =>
-        // if it is a marker it is passed thru
-        request
     }
   }
 

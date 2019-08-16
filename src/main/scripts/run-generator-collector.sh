@@ -3,6 +3,8 @@ java -cp scala-kafka-mandelbrot_2.12-0.1.jar:scala-kafka-mandelbrot-assembly-0.1
     -a connector \
     -tl -2.2,1.2 \
     -br 1.0,-1.2 \
-    -sx 800 \
-    -sy 600 \
+    -sx 16 \
+    -sy 16 \
     -i  128
+    #-sx 800 \
+    #-sy 600 \

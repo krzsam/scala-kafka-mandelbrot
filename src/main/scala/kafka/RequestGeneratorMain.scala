@@ -52,7 +52,7 @@ object RequestGeneratorMain {
 
     val topic = api match {
       case "connector" => Topics.CONNECTOR_REQUESTS
-      case "stream"    => Topics.STREAM_REQUESTS
+      case "streaming" => Topics.STREAM_REQUESTS
     }
 
     RequestGenerator.run( kafkaUri, topic, topLeft, bottomRight, sizeX, sizeY, iterations )
