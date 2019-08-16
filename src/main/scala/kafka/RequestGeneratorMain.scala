@@ -3,13 +3,15 @@ package kafka
 import org.apache.commons.math3.complex.Complex
 import org.slf4j.{Logger, LoggerFactory}
 
-object ProducerMain {
+object RequestGeneratorMain {
   private val LOG: Logger = LoggerFactory.getLogger( this.getClass )
 
   type OptionMap = Map[ Symbol, Any ]
 
   def nextOption( map: OptionMap, params: List[String] ): OptionMap = {
     params match {
+      case "-k" :: kafkaUri :: tail =>
+        nextOption( map + ( 'kafka -> kafkaUri ), tail )
       case "-a" :: command :: tail =>
         nextOption( map + ( 'api -> command ), tail )
       case "-tl" :: topLeft :: tail =>
@@ -26,8 +28,6 @@ object ProducerMain {
         nextOption( map + ( 'steps_y -> steps_y.toInt ), tail )
       case "-i" :: iterations :: tail =>
         nextOption( map + ( 'iterations -> iterations.toInt ), tail )
-      case "-b" :: batchSize :: tail =>
-        nextOption( map + ( 'batchSize -> batchSize.toInt ), tail )
       case Nil =>
         map
       case _ =>
@@ -40,13 +40,13 @@ object ProducerMain {
 
     LOG.info( s"Parsed parameters: ${options}")
 
+    val kafkaUri =    options.getOrElse( 'kafka, "unknown" ).asInstanceOf[String]
     val api     =     options.getOrElse( 'api, "unknown" ).asInstanceOf[String]
     val topLeft =     options.getOrElse( 'topLeft, new Complex(0,0) ).asInstanceOf[Complex]
     val bottomRight = options.getOrElse( 'bottomRight, new Complex(0,0) ).asInstanceOf[Complex]
     val stepsX =      options.getOrElse( 'steps_x, 640 ).asInstanceOf[Int]
     val stepsY =      options.getOrElse( 'steps_y, 480 ).asInstanceOf[Int]
     val iterations =  options.getOrElse( 'iterations, 128 ).asInstanceOf[Int]
-    val batchSize =   options.getOrElse( 'batchSize, 100 ).asInstanceOf[Int]
 
     LOG.info( s"Starting Producer for ${api} API topics")
 
@@ -55,6 +55,6 @@ object ProducerMain {
       case "stream"    => Topics.STREAM_REQUESTS
     }
 
-    RequestGenerator.run( topic, topLeft, bottomRight, stepsX, stepsY, iterations, batchSize )
+    RequestGenerator.run( kafkaUri, topic, topLeft, bottomRight, stepsX, stepsY, iterations )
   }
 }

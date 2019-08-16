@@ -9,21 +9,21 @@ import org.apache.kafka.common.serialization.{StringDeserializer, StringSerializ
 import scala.collection.mutable
 
 object KafkaUtil {
-  def kafkaProps( groupId: String ): Properties = {
+  def kafkaProps( kafkaUri: String, groupId: String ): Properties = {
     val props = new Properties()
 
-    for( (k,v) <- kafkaMap( groupId ) ) {
+    for( (k,v) <- kafkaMap( kafkaUri, groupId ) ) {
       props.setProperty( k, v.toString )
     }
 
     props
   }
 
-  def kafkaMap( groupId: String ) : Map[String,AnyRef] = {
+  def kafkaMap( kafkaUri: String, groupId: String ) : Map[String,AnyRef] = {
     val hostname = InetAddress.getLocalHost().getHostName().toUpperCase()
     val map = mutable.Map.empty[String,AnyRef]
 
-    map += "bootstrap.servers" -> s"${hostname}:9092"
+    map += "bootstrap.servers" -> kafkaUri
     map += "acks" -> "all"
     map += "application.id" -> groupId
     map += "key.serializer" -> classOf[StringSerializer].getCanonicalName

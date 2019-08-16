@@ -8,13 +8,13 @@ import javax.imageio.ImageIO
 import kafka.RequestGenerator.DataPoint
 import kafka.{KafkaUtil, RequestGenerator, Topics}
 import net.liftweb.json.{DefaultFormats, Serialization}
-import org.apache.kafka.clients.consumer.{ConsumerRecord, ConsumerRecords, KafkaConsumer}
+import org.apache.kafka.clients.consumer.{ConsumerRecords, KafkaConsumer}
 import org.slf4j.{Logger, LoggerFactory}
 
 import scala.annotation.tailrec
 import scala.collection.JavaConverters
 
-object ResultCollector {
+object ResultCollectorMain {
   private val LOG: Logger = LoggerFactory.getLogger( this.getClass )
 
   val topicIn = Topics.CONNECTOR_RESPONSES
@@ -24,10 +24,29 @@ object ResultCollector {
   // for JSON deserialisation
   implicit val formats = DefaultFormats
 
+  type OptionMap = Map[ Symbol, Any ]
+
+  def nextOption( map: OptionMap, params: List[String] ): OptionMap = {
+    params match {
+      case "-k" :: kafkaUri :: tail =>
+        nextOption( map + ( 'kafka -> kafkaUri ), tail )
+      case Nil =>
+        map
+      case _ =>
+        map
+    }
+  }
+
   def main(args: Array[String]) {
     LOG.info( "Starting Result Collector")
 
-    val props = KafkaUtil.kafkaProps( "Mandelbrot.Results.Connector")
+    val options = nextOption( Map(), args.toList )
+
+    LOG.info( s"Parsed parameters: ${options}")
+
+    val kafkaUri =    options.getOrElse( 'kafka, "unknown" ).asInstanceOf[String]
+
+    val props = KafkaUtil.kafkaProps( kafkaUri, "Mandelbrot.Results.Connector")
     val requestConsumer = new KafkaConsumer[String, String]( props )
 
     requestConsumer.subscribe( JavaConverters.asJavaCollection( List( topicIn.topicName )  ) )
@@ -40,32 +59,24 @@ object ResultCollector {
   Poll for calculation results sent back from Consumer
   */
   @tailrec private def poller(resultConsumer: KafkaConsumer[String, String] ): Unit = {
-    val msg: ConsumerRecords[String, String] = resultConsumer.poll( Duration.ofMinutes( 5 ))
-    msg match {
-      case recs: ConsumerRecords[String, String] =>
-        LOG.info( s"Received message with records ${recs.count()}")
-        processRecords( recs )
-      case _ => /* nothing */
-    }
-
+    val records: ConsumerRecords[String, String] = resultConsumer.poll( Duration.ofMinutes( 5 ))
+    processRecords( records )
     poller( resultConsumer )
   }
 
-  private def processRecords(recs: ConsumerRecords[String, String] ): Unit = {
-    val list: List[ConsumerRecord[String, String]] = JavaConverters.asScalaIterator( recs.iterator() ).toList
-
-    list.foreach {
-      rec: ConsumerRecord[String, String]  => processBatch( rec.value(), rec.key() )
+  private def processRecords(records: ConsumerRecords[String, String] ): Unit = {
+    records.forEach {
+      record =>
+        processResult( record.value(), record.key() )
     }
   }
 
-  private def processBatch( value: String, key: String ): Unit = {
-    val results = Serialization.read[List[Any]]( value )
-    LOG.info( s"Received batch of results of size ${results.size}" )
+  private def processResult( value: String, key: String ): Unit = {
+    val result = Serialization.read[Any]( value )
 
-    results.foreach{
+    result match {
       case RequestGenerator.BEGIN_MARKER( sizeX, sizeY ) =>
-        LOG.info( s"Received BEGIN marker, createing image of size ${sizeX} x ${sizeY}")
+        LOG.info( s"Received BEGIN marker, creating image of size ${sizeX} x ${sizeY}")
         img = new BufferedImage( sizeX, sizeY, BufferedImage.TYPE_INT_RGB )
 
       case RequestGenerator.END_MARKER =>

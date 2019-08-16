@@ -6,7 +6,7 @@ import kafka.RequestGenerator.DataPoint
 import kafka.{Calculate, KafkaUtil, RequestGenerator, Topics}
 import net.liftweb.json.{DefaultFormats, Serialization}
 import org.apache.commons.math3.complex.Complex
-import org.apache.kafka.clients.consumer.{ConsumerRecord, ConsumerRecords, KafkaConsumer}
+import org.apache.kafka.clients.consumer.{ConsumerRecords, KafkaConsumer}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.slf4j.{Logger, LoggerFactory}
 
@@ -24,10 +24,29 @@ object CalculationMain {
   // for JSON deserialisation
   implicit val formats = DefaultFormats
 
+  type OptionMap = Map[ Symbol, Any ]
+
+  def nextOption( map: OptionMap, params: List[String] ): OptionMap = {
+    params match {
+      case "-k" :: kafkaUri :: tail =>
+        nextOption( map + ( 'kafka -> kafkaUri ), tail )
+      case Nil =>
+        map
+      case _ =>
+        map
+    }
+  }
+
   def main(args: Array[String]) {
     LOG.info( "Starting Calculation Service for CONNECTOR API topics")
 
-    val props = KafkaUtil.kafkaProps( "Mandelbrot.Calculation.Connector")
+    val options = nextOption( Map(), args.toList )
+
+    LOG.info( s"Parsed parameters: ${options}")
+
+    val kafkaUri =    options.getOrElse( 'kafka, "unknown" ).asInstanceOf[String]
+
+    val props = KafkaUtil.kafkaProps( kafkaUri, "Mandelbrot.Calculation.Connector")
     val requestConsumer = new KafkaConsumer[String, String]( props )
     val resultProducer: KafkaProducer[String, String] = new KafkaProducer[String, String]( props )
 
@@ -43,31 +62,24 @@ object CalculationMain {
   Poll for calculation requests sent from Producer
   */
   @tailrec private def poller(consumer: KafkaConsumer[String, String], producer: KafkaProducer[String, String] ) {
-    val msg: ConsumerRecords[String, String] = consumer.poll( Duration.ofMinutes( 5 ))
-    msg match {
-      case recs: ConsumerRecords[String, String] =>
-        LOG.info( s"Received message with records ${recs.count()}")
-        processRecords( recs, producer )
-      case _ => /* nothing */
-    }
+    val records: ConsumerRecords[String, String] = consumer.poll( Duration.ofMinutes( 5 ))
+    LOG.info( s"Received message with records ${records.count()}")
+    readRecords( records, producer )
     poller( consumer, producer )
   }
 
-  private def processRecords(recs: ConsumerRecords[String, String], producer: KafkaProducer[String, String] ): Unit = {
-    val list: List[ConsumerRecord[String, String]] = JavaConverters.asScalaIterator( recs.iterator() ).toList
-
-    val results = list.flatMap(
-      record => processBatch( record.value(), record.partition() )
-    )
-
-    if( results.size > 0 )
-      sendResults( producer, results, list(0).key() )
+  private def readRecords(records: ConsumerRecords[String, String], producer: KafkaProducer[String, String] ): Unit = {
+    records.forEach{
+      record =>
+        val result = processDataPoint( record.value(), record.partition() )
+        sendResult( producer, result, record.key() )
+    }
   }
 
-  private def processBatch( value: String, partition: Int ): Seq[Any] = {
-    val requests = Serialization.read[List[Any]]( value )
+  private def processDataPoint( value: String, partition: Int ): Any = {
+    val request = Serialization.read[Any]( value )
 
-    requests.map {
+    request match {
       case begin @ RequestGenerator.BEGIN_MARKER =>
         begin
 
@@ -83,9 +95,8 @@ object CalculationMain {
     }
   }
 
-  private def sendResults(resultProducer: KafkaProducer[String, String], results: Seq[Any], key: String ): Unit = {
-    LOG.info( s"Sending back ${results.size} results")
-    val jsonStr = Serialization.write(results)
+  private def sendResult(resultProducer: KafkaProducer[String, String], result: Any, key: String ): Unit = {
+    val jsonStr = Serialization.write(result)
     val record = new ProducerRecord[String, String](topicOut.topicName, key, jsonStr)
     resultProducer.send(record)
   }
