@@ -22,10 +22,10 @@ object RequestGeneratorMain {
         val pair = bottomRight.split( ",")
         val numPair = new Complex( pair(0).toDouble, pair(1).toDouble )
         nextOption( map + ( 'bottomRight -> numPair ), tail )
-      case "-sx" :: steps_x :: tail =>
-        nextOption( map + ( 'steps_x -> steps_x.toInt ), tail )
-      case "-sy" :: steps_y :: tail =>
-        nextOption( map + ( 'steps_y -> steps_y.toInt ), tail )
+      case "-sx" :: sizeX :: tail =>
+        nextOption( map + ( 'sizeX -> sizeX.toInt ), tail )
+      case "-sy" :: sizeY :: tail =>
+        nextOption( map + ( 'sizeY -> sizeY.toInt ), tail )
       case "-i" :: iterations :: tail =>
         nextOption( map + ( 'iterations -> iterations.toInt ), tail )
       case Nil =>
@@ -44,8 +44,8 @@ object RequestGeneratorMain {
     val api     =     options.getOrElse( 'api, "unknown" ).asInstanceOf[String]
     val topLeft =     options.getOrElse( 'topLeft, new Complex(0,0) ).asInstanceOf[Complex]
     val bottomRight = options.getOrElse( 'bottomRight, new Complex(0,0) ).asInstanceOf[Complex]
-    val stepsX =      options.getOrElse( 'steps_x, 640 ).asInstanceOf[Int]
-    val stepsY =      options.getOrElse( 'steps_y, 480 ).asInstanceOf[Int]
+    val sizeX =      options.getOrElse( 'sizeX, 640 ).asInstanceOf[Int]
+    val sizeY =      options.getOrElse( 'sizeY, 480 ).asInstanceOf[Int]
     val iterations =  options.getOrElse( 'iterations, 128 ).asInstanceOf[Int]
 
     LOG.info( s"Starting Producer for ${api} API topics")
@@ -55,6 +55,6 @@ object RequestGeneratorMain {
       case "stream"    => Topics.STREAM_REQUESTS
     }
 
-    RequestGenerator.run( kafkaUri, topic, topLeft, bottomRight, stepsX, stepsY, iterations )
+    RequestGenerator.run( kafkaUri, topic, topLeft, bottomRight, sizeX, sizeY, iterations )
   }
 }

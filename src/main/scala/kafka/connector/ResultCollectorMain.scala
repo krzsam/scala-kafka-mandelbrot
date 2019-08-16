@@ -5,8 +5,7 @@ import java.io.File
 import java.time.Duration
 
 import javax.imageio.ImageIO
-import kafka.RequestGenerator.DataPoint
-import kafka.{KafkaUtil, RequestGenerator, Topics}
+import kafka._
 import net.liftweb.json.{DefaultFormats, Serialization}
 import org.apache.kafka.clients.consumer.{ConsumerRecords, KafkaConsumer}
 import org.slf4j.{Logger, LoggerFactory}
@@ -67,28 +66,37 @@ object ResultCollectorMain {
   private def processRecords(records: ConsumerRecords[String, String] ): Unit = {
     records.forEach {
       record =>
-        processResult( record.value(), record.key() )
+        val result = Serialization.read[Message]( record.value() )
+        //LOG.info( s"Received result: ${result}")
+        processResult( result, record.key() )
     }
   }
 
-  private def processResult( value: String, key: String ): Unit = {
-    val result = Serialization.read[Any]( value )
-
-    result match {
-      case RequestGenerator.BEGIN_MARKER( sizeX, sizeY ) =>
-        LOG.info( s"Received BEGIN marker, creating image of size ${sizeX} x ${sizeY}")
-        img = new BufferedImage( sizeX, sizeY, BufferedImage.TYPE_INT_RGB )
-
-      case RequestGenerator.END_MARKER =>
-        LOG.info( s"Received END marker, writing image to file")
-        val now = System.currentTimeMillis()
-        val newFile = s"image-${now}.png"
-        LOG.info( s"Output file is: ${newFile}")
-        ImageIO.write( img, "PNG", new File( newFile ));
-
-      case DataPoint( posX, posY, cn, iter ) =>
-        val colour = if( cn.isNaN ||  cn.isInfinite ) 0 else 0xFFFFFF
+  private def processResult( result: Message, key: String ): Unit = {
+    result.data match {
+      case Some( DataPoint( posX, posY, cn, iter ) ) =>
+        val colour = if( cn.isNaN ||  cn.isInfinite || cn.abs() > 10 ) 0 else 0xFFFFFF
+        //LOG.info( s"${result.data.get.c} -> Setting image data: (${posX},${posY}) to ${colour}")
         img.setRGB( posX, posY, colour )
+
+      case None =>
+        result.marker match {
+          case Some( Marker( begin, sizeX, sizeY ) ) =>
+            if( begin ) {
+              LOG.info( s"Received BEGIN marker, creating image of size ${sizeX} x ${sizeY}")
+              img = new BufferedImage( sizeX, sizeY, BufferedImage.TYPE_INT_RGB )
+            } else {
+              LOG.info( s"Received END marker, writing image to file")
+              val now = System.currentTimeMillis()
+              val newFile = s"image-${now}.png"
+              LOG.info( s"Output file is: ${newFile}")
+              ImageIO.write( img, "PNG", new File( newFile ));
+            }
+
+          case None =>
+            // nothing
+        }
     }
+
   }
 }

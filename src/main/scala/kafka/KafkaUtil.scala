@@ -32,7 +32,7 @@ object KafkaUtil {
     map += "value.deserializer" -> classOf[StringDeserializer].getCanonicalName
     map += "group.id" -> groupId
     map += "partition.assignment.strategy" -> classOf[RoundRobinAssignor].getCanonicalName
-    map += "client.id" -> s"cli.${hostname}"
+    map += "client.id" -> s"cli.${groupId}.${hostname}"
 
     map.toMap
   }

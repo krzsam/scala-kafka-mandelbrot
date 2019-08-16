@@ -2,8 +2,7 @@ package kafka.connector
 
 import java.time.Duration
 
-import kafka.RequestGenerator.DataPoint
-import kafka.{Calculate, KafkaUtil, RequestGenerator, Topics}
+import kafka._
 import net.liftweb.json.{DefaultFormats, Serialization}
 import org.apache.commons.math3.complex.Complex
 import org.apache.kafka.clients.consumer.{ConsumerRecords, KafkaConsumer}
@@ -63,7 +62,7 @@ object CalculationMain {
   */
   @tailrec private def poller(consumer: KafkaConsumer[String, String], producer: KafkaProducer[String, String] ) {
     val records: ConsumerRecords[String, String] = consumer.poll( Duration.ofMinutes( 5 ))
-    LOG.info( s"Received message with records ${records.count()}")
+    //LOG.info( s"Received message with records ${records.count()}")
     readRecords( records, producer )
     poller( consumer, producer )
   }
@@ -71,31 +70,27 @@ object CalculationMain {
   private def readRecords(records: ConsumerRecords[String, String], producer: KafkaProducer[String, String] ): Unit = {
     records.forEach{
       record =>
-        val result = processDataPoint( record.value(), record.partition() )
+        val request = Serialization.read[Message]( record.value() )
+        val result = processDataPoint( request )
         sendResult( producer, result, record.key() )
     }
   }
 
-  private def processDataPoint( value: String, partition: Int ): Any = {
-    val request = Serialization.read[Any]( value )
-
-    request match {
-      case begin @ RequestGenerator.BEGIN_MARKER =>
-        begin
-
-      case end @ RequestGenerator.END_MARKER =>
-        end
-
-      case DataPoint(posX, posY, c0, iterations) =>
+  private def processDataPoint( request: Message ): Message = {
+    request.data match {
+      case Some( DataPoint(posX, posY, c0, iterations) ) =>
         val result = Calculate.calculateOne( c0, iterations )
         val resultAdjusted = if (result.isInfinite || result.isNaN) BigNumber else result
-        DataPoint(posX, posY, resultAdjusted, 0)
+        //LOG.info( s"Calculating: (${posX},${posY}) , ${c0} -> ${resultAdjusted}")
+        Message( Some( DataPoint(posX, posY, resultAdjusted, 0) ), None )
 
-      case _ => DataPoint(0, 0, BigNumber, 0)
+      case None =>
+        // if it is a marker it is passed thru
+        request
     }
   }
 
-  private def sendResult(resultProducer: KafkaProducer[String, String], result: Any, key: String ): Unit = {
+  private def sendResult(resultProducer: KafkaProducer[String, String], result: Message, key: String ): Unit = {
     val jsonStr = Serialization.write(result)
     val record = new ProducerRecord[String, String](topicOut.topicName, key, jsonStr)
     resultProducer.send(record)
